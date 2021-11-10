@@ -1,6 +1,8 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+import urllib.request
+import os
 from time import sleep
 from decouple import config
 
@@ -12,6 +14,7 @@ DEBUG = config("DEBUG", default=True)
 USERNAME = config("USERNAME")
 PASSWORD = config("PASSWORD")
 WAIT_TIME = config("WAIT_TIME", default=0)
+CHILDS_NAME = config("CHILDS_NAME")
 
 
 def main():
@@ -49,6 +52,7 @@ def main():
         print("Closing PopUp")
 
     # Navigate to Entries
+    sleep(1)
     driver.find_element(By.LINK_TEXT, "Entries").click()
     if DEBUG:
         print("Navigating to Entries")
@@ -60,21 +64,48 @@ def main():
 
     temp_last_page_arr = div.get_attribute("href").split("=")
     last_page = temp_last_page_arr[1]
+    current_page = int(last_page)
     if DEBUG:
         print("Last Page: " + last_page)
 
     # Navigate to Last page
     driver.find_element(By.XPATH, "//*[@class='pagination']/li[last()]/a").click()
 
-    images = driver.find_elements(By.XPATH, "//*[@title='Download Image']")
+    while current_page > 0:
+        # Store all image links
+        images = driver.find_elements(By.XPATH, "//*[@title='Download Image']")
 
-    if DEBUG:
         i = 0
         for img in images:
-            print("Link " + str(i + 1) + " Found")
+            sleep(0.5)
+            if not os.path.exists(
+                "img/" + CHILDS_NAME + "_" + str(current_page) + "_" + str(i) + ".jpg"
+            ):
+                urllib.request.urlretrieve(
+                    img.get_attribute("href"),
+                    "img/"
+                    + CHILDS_NAME
+                    + "_"
+                    + str(current_page)
+                    + "_"
+                    + str(i)
+                    + ".jpg",
+                )
             i += 1
 
+        # Navigate (1) page back until current page = (0)
+        if current_page != 1:
+            driver.find_element(
+                By.XPATH, "//*[@class='pagination']/li/a[@rel='prev']"
+            ).click()
+        sleep(1)
+        current_page -= 1
+
+        if DEBUG:
+            print("Current Page: " + str(current_page))
+
     sleep(20)
+    driver.quit()
 
 
 if __name__ == "__main__":
