@@ -63,6 +63,17 @@ def main():
     if DEBUG:
         print("Last Page: " + last_page)
 
+    # Navigate to Last page
+    driver.find_element(By.XPATH, "//*[@class='pagination']/li[last()]/a").click()
+
+    images = driver.find_elements(By.XPATH, "//*[@title='Download Image']")
+
+    if DEBUG:
+        i = 0
+        for img in images:
+            print("Link " + str(i + 1) + " Found")
+            i += 1
+
     sleep(20)
 
 
