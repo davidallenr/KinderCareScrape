@@ -25,7 +25,7 @@ def main():
     driver.get(LOGIN_URL)
 
     if DEBUG:
-        print("Getting URL: https://classroom.kindercare.com/login \n ")
+        print("Getting URL: https://classroom.kindercare.com/login")
         if driver.title != "KinderCare - Log In":
             print("Title does not Match")
         else:
@@ -45,14 +45,24 @@ def main():
 
     # Close popup window
     driver.find_element(By.CLASS_NAME, "contacts-close-button").click()
+    if DEBUG:
+        print("Closing PopUp")
 
     # Navigate to Entries
     driver.find_element(By.LINK_TEXT, "Entries").click()
+    if DEBUG:
+        print("Navigating to Entries")
 
     # div = driver.find_element(By.ID, "paginator")
     div = driver.find_element(By.XPATH, "//*[@class='pagination']/li[last()]/a")
     if DEBUG:
         print("Last Pagination Found: " + div.get_attribute("href"))
+
+    temp_last_page_arr = div.get_attribute("href").split("=")
+    last_page = temp_last_page_arr[1]
+    if DEBUG:
+        print("Last Page: " + last_page)
+
     sleep(20)
 
 
