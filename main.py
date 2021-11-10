@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
 from time import sleep
 from decouple import config
 
@@ -7,7 +8,7 @@ from decouple import config
 # These values are stored in the .env that you must create
 WEBDRIVER_PATH = config("WEBDRIVER_PATH")
 LOGIN_URL = config("LOGIN_URL")
-DEBUG = config("DEBUG", default=False)
+DEBUG = config("DEBUG", default=True)
 USERNAME = config("USERNAME")
 PASSWORD = config("PASSWORD")
 WAIT_TIME = config("WAIT_TIME", default=0)
@@ -33,16 +34,25 @@ def main():
 
     # Find the username and password elements
     # Fill out username and password then send the return key
-    elem_user_login = driver.find_element_by_name("user[login]")
-    elem_user_password = driver.find_element_by_name("user[password]")
+    # LOGIN SECTION
+    elem_user_login = driver.find_element(By.NAME, "user[login]")
+    elem_user_password = driver.find_element(By.NAME, "user[password]")
     elem_user_login.clear()
     elem_user_login.send_keys(USERNAME)
     elem_user_password.clear()
     elem_user_password.send_keys(PASSWORD)
     elem_user_password.send_keys(Keys.RETURN)
 
-    driver.find_element_by_class_name("contacts-close-button").click()
+    # Close popup window
+    driver.find_element(By.CLASS_NAME, "contacts-close-button").click()
 
+    # Navigate to Entries
+    driver.find_element(By.LINK_TEXT, "Entries").click()
+
+    # div = driver.find_element(By.ID, "paginator")
+    div = driver.find_element(By.XPATH, "//*[@class='pagination']/li[last()]/a")
+    if DEBUG:
+        print("Last Pagination Found: " + div.get_attribute("href"))
     sleep(20)
 
 
