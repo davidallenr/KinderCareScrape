@@ -81,18 +81,24 @@ def main():
 
     while current_page > 0:
         # Store all image links
+        i = 1
         images = driver.find_elements(By.XPATH, "//*[@title='Download Image']")
 
-        i = 0
         for img in images:
             sleep(0.2)
-            # if not os.path.exists(
-            #   "img/" + CHILDS_NAME + "_" + str(current_page) + "_" + str(i) + ".jpg"
-            # ):
-            urllib.request.urlretrieve(
-                img.get_attribute("href"),
-                "img/" + CHILDS_NAME + "_" + str(current_page) + "_" + str(i) + ".jpg",
-            )
+            # Get the date from the TD element related to the picture
+            date = driver.find_element(
+                By.XPATH, "//*/table/tbody/tr[" + str(i) + "]/td[2]"
+            ).text.replace("/", "-")
+
+            # If that file does NOT exist then grab photo
+            if not os.path.exists(
+                "img/" + CHILDS_NAME + "_" + date + "_" + str(i) + ".jpg"
+            ):
+                urllib.request.urlretrieve(
+                    img.get_attribute("href"),
+                    "img/" + CHILDS_NAME + "_" + date + "_" + str(i) + ".jpg",
+                )
             i += 1
 
         # Navigate (1) page back until current page = (0)
