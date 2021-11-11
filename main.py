@@ -1,6 +1,8 @@
 from selenium import webdriver
+from selenium.webdriver.chrome import options
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 import urllib.request
 import os
 from time import sleep
@@ -15,11 +17,17 @@ USERNAME = config("USERNAME")
 PASSWORD = config("PASSWORD")
 WAIT_TIME = config("WAIT_TIME", default=0)
 CHILDS_NAME = config("CHILDS_NAME")
+HEADLESS = config("HEADLESS", default=True)
 
 
 def main():
 
-    driver = webdriver.Chrome(WEBDRIVER_PATH)
+    chrome_options = Options()
+
+    if HEADLESS:
+        chrome_options.add_argument("--headless")
+
+    driver = webdriver.Chrome(WEBDRIVER_PATH, options=chrome_options)
     driver.implicitly_wait(WAIT_TIME)
 
     if DEBUG:
@@ -77,20 +85,14 @@ def main():
 
         i = 0
         for img in images:
-            sleep(0.5)
-            if not os.path.exists(
-                "img/" + CHILDS_NAME + "_" + str(current_page) + "_" + str(i) + ".jpg"
-            ):
-                urllib.request.urlretrieve(
-                    img.get_attribute("href"),
-                    "img/"
-                    + CHILDS_NAME
-                    + "_"
-                    + str(current_page)
-                    + "_"
-                    + str(i)
-                    + ".jpg",
-                )
+            sleep(0.2)
+            # if not os.path.exists(
+            #   "img/" + CHILDS_NAME + "_" + str(current_page) + "_" + str(i) + ".jpg"
+            # ):
+            urllib.request.urlretrieve(
+                img.get_attribute("href"),
+                "img/" + CHILDS_NAME + "_" + str(current_page) + "_" + str(i) + ".jpg",
+            )
             i += 1
 
         # Navigate (1) page back until current page = (0)
@@ -98,7 +100,7 @@ def main():
             driver.find_element(
                 By.XPATH, "//*[@class='pagination']/li/a[@rel='prev']"
             ).click()
-        sleep(1)
+        sleep(0.5)
         current_page -= 1
 
         if DEBUG:

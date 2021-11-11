@@ -26,7 +26,8 @@ This is an example of how to list things you need to use the software and how to
    ```sh
    WEBDRIVER_PATH = "path_to_chrome_driver"
    LOGIN_URL = "https://classroom.kindercare.com/login"
-   DEBUG = False
+   DEBUG = True
+   HEADLESS = True
    USERNAME = "your_login"
    PASSWORD = "your_password"
    WAIT_TIME = 5
