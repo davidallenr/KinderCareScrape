@@ -112,7 +112,7 @@ def main():
         if DEBUG:
             print("Current Page: " + str(current_page))
 
-    sleep(20)
+    sleep(1)
     driver.quit()
 
 
