@@ -3,6 +3,7 @@ from selenium.webdriver.chrome import options
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from datetime import datetime
 import urllib.request
 import os
 from time import sleep
@@ -80,27 +81,47 @@ def main():
     driver.find_element(By.XPATH, "//*[@class='pagination']/li[last()]/a").click()
 
     while current_page > 0:
-        # Store all image links
+        # Store all image and video links
+        objects = driver.find_elements(By.XPATH, "//*[@title='Download Image' or @title='Download Video']")
+        
         i = 1
-        images = driver.find_elements(By.XPATH, "//*[@title='Download Image']")
 
-        for img in images:
+        for obj in objects:
             sleep(0.2)
-            # Get the date from the TD element related to the picture
-            date = driver.find_element(
+            # Get the date from the TD element related to the object
+            webdate = driver.find_element(
                 By.XPATH, "//*/table/tbody/tr[" + str(i) + "]/td[2]"
             ).text.replace("/", "-")
-
+        
+            date_obj = datetime.strptime(webdate, '%m-%d-%y')   
+            date = str(date_obj.date())
+        
             # If that file does NOT exist then grab photo
-            if not os.path.exists(
-                "img/" + CHILDS_NAME + "_" + date + "_" + str(i) + ".jpg"
-            ):
-                urllib.request.urlretrieve(
-                    img.get_attribute("href"),
-                    "img/" + CHILDS_NAME + "_" + date + "_" + str(i) + ".jpg",
-                )
+            try:
+                if obj.get_attribute("title") == "Download Image":
+                    if not os.path.exists(
+                        "img/" + date + "_" + str(current_page) + "_" + CHILDS_NAME + "_" + str(i) + ".jpg"
+                    ):
+                        urllib.request.urlretrieve(
+                            obj.get_attribute("href"),
+                            "img/" + date + "_" + str(current_page) + "_" + CHILDS_NAME + "_" + str(i) + ".jpg",
+                        )
+            except urllib.error.HTTPError:
+                print("Error")
+            
+            try:
+                if obj.get_attribute("title") == "Download Video":
+                    if not os.path.exists(
+                        "img/" + date + "_" + str(current_page) + "_" + CHILDS_NAME + "_" + str(i) + ".mov"
+                    ):
+                        urllib.request.urlretrieve(
+                            obj.get_attribute("href"),
+                            "img/" + date + "_" + str(current_page) + "_" + CHILDS_NAME + "_" + str(i) + ".mov",
+                        )
+        
+            except urllib.error.HTTPError:
+                print("Error")
             i += 1
-
         # Navigate (1) page back until current page = (0)
         if current_page != 1:
             driver.find_element(
