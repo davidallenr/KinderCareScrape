@@ -127,5 +127,6 @@ dmypy.json
 .env
 .vscode
 img/
+mov/
 chromedriver
 chromedriver.exe
