@@ -8,6 +8,7 @@ from selenium.webdriver.chrome.options import Options
 from datetime import datetime
 from time import sleep
 from decouple import config
+from concurrent.futures import ThreadPoolExecutor
 
 
 # These values are stored in the .env that you must create
@@ -18,23 +19,23 @@ PASSWORD = config("PASSWORD")
 WAIT_TIME = config("WAIT_TIME", default=0)
 CHILDS_NAME = config("CHILDS_NAME")
 HEADLESS = config("HEADLESS", default=True)
+CORE_COUNT = config("CORE_COUNT", default = 1)  ## Set this to the physical core count on your cpu
+MAX_WORKER = 2 * int(CORE_COUNT) + 1
 
 def retrieve_media_from_container_of_links(container_of_links_and_path):
-    print("Beginning Retrieval of " + str(len(container_of_links_and_path)) + " files...")
-    missing_files = 0
-    for obj in container_of_links_and_path:
-        href = obj['href']
-        path = obj['path']
+    href = container_of_links_and_path['href']
+    path = container_of_links_and_path['path']
 
-        # If that file does NOT exist then retrieve
-        try:
-            if not os.path.exists(path):
-                urllib.request.urlretrieve(href,path)
-        except urllib.error.HTTPError:
-            print("Unable to retrieve file:" + path)
-            missing_files += 1
-    print("Retrieval of " + str(len(container_of_links_and_path) - missing_files) + " files complete")
+    # If that file does NOT exist then retrieve
+    try:
+        if not os.path.exists(path):
+            urllib.request.urlretrieve(href,path)
+    except urllib.error.HTTPError:
+        print("Unable to retrieve file:" + path)
 
+def concurrently_retrieve_media_from_container_of_links(container_of_links_and_path):
+    with ThreadPoolExecutor(max_workers=MAX_WORKER) as executor:
+        return executor.map(retrieve_media_from_container_of_links, container_of_links_and_path, timeout=60)
 
 def add_links_and_path_to_containers(list_of_links, driver, current_page, image_container, video_container):   
     item_count = 1
@@ -77,7 +78,6 @@ def return_last_page(driver):
     return int(last_page)
 
 def main():
-
     chrome_options = Options()
 
     if HEADLESS:
@@ -128,9 +128,10 @@ def main():
         current_page -= 1
 
 
-    retrieve_media_from_container_of_links(video_container)
-
-    retrieve_media_from_container_of_links(image_container)
+    print("Beginning video retrieval")
+    concurrently_retrieve_media_from_container_of_links(video_container)
+    print("Beginning image retrieval")
+    concurrently_retrieve_media_from_container_of_links(image_container)
     
     sleep(1)
     driver.quit()

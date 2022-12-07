@@ -30,6 +30,7 @@ This is an example of how to list things you need to use the software and how to
    PASSWORD = "your_password"
    WAIT_TIME = 5
    CHILDS_NAME = "your_kids_name"
+   CORE_COUNT = 8 //SET THIS TO THE AMOUNT OF PHYSICAL CORES ON YOUR CPU
    ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
