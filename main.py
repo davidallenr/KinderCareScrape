@@ -1,5 +1,6 @@
-import urllib.request
+import requests
 import os
+import concurrent.futures
 from selenium import webdriver
 from selenium.webdriver.chrome import options
 from selenium.webdriver.common.keys import Keys
@@ -8,7 +9,6 @@ from selenium.webdriver.chrome.options import Options
 from datetime import datetime
 from time import sleep
 from decouple import config
-from concurrent.futures import ThreadPoolExecutor
 
 
 # These values are stored in the .env that you must create
@@ -21,6 +21,7 @@ CHILDS_NAME = config("CHILDS_NAME")
 HEADLESS = config("HEADLESS", default=True)
 CORE_COUNT = config("CORE_COUNT", default = 1)  ## Set this to the physical core count on your cpu
 MAX_WORKER = 2 * int(CORE_COUNT) + 1
+LAST_DATE_FILENAME = "last_date.txt"
 
 def retrieve_media_from_container_of_links(container_of_links_and_path):
     href = container_of_links_and_path['href']
@@ -29,16 +30,33 @@ def retrieve_media_from_container_of_links(container_of_links_and_path):
     # If that file does NOT exist then retrieve
     try:
         if not os.path.exists(path):
-            urllib.request.urlretrieve(href,path)
-    except urllib.error.HTTPError:
+            response = requests.get(href)
+            with open(path, 'wb') as f:
+                f.write(response.content)
+    except requests.exceptions.HTTPError:
         print("Unable to retrieve file:" + path)
 
 def concurrently_retrieve_media_from_container_of_links(container_of_links_and_path):
-    with ThreadPoolExecutor(max_workers=MAX_WORKER) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKER) as executor:
         return executor.map(retrieve_media_from_container_of_links, container_of_links_and_path, timeout=60)
 
-def add_links_and_path_to_containers(list_of_links, driver, current_page, image_container, video_container):   
+
+# Read the last date from the file
+def read_last_date():
+    if os.path.exists(LAST_DATE_FILENAME):
+        with open(LAST_DATE_FILENAME, "r") as f:
+            return f.read()
+    return None
+
+# Write the last date to the file
+def write_last_date(last_date):
+    with open(LAST_DATE_FILENAME, "w") as f:
+        f.write(last_date)
+
+def add_links_and_path_to_containers(list_of_links, driver, image_container, video_container):
     item_count = 1
+    last_date = read_last_date()
+    count = 0
     for link in list_of_links:
         # Get the date from the TD element related to the object
         webdate = driver.find_element(
@@ -48,17 +66,26 @@ def add_links_and_path_to_containers(list_of_links, driver, current_page, image_
         date_obj = datetime.strptime(webdate, '%m-%d-%y')   
         date = str(date_obj.date())
     
+        # Increment the count if the date is the same as the last item
+        if date == last_date:
+            count += 1
+        else:
+            count = 0
+            last_date = date
+            write_last_date(last_date)
+
         if link.get_attribute("title") == "Download Image":
             image_container.append({
                 "href": link.get_attribute("href"),
-                "path": "img/" + date + "_" + str(current_page) + "_" + CHILDS_NAME + "_" + str(item_count) + ".jpg"
+                "path": "img/" + date + "_" + CHILDS_NAME + "_" + str(count) + ".jpg"
             })
 
         if link.get_attribute("title") == "Download Video":
             video_container.append({
                 "href": link.get_attribute("href"),
-                "path": "mov/" + date + "_" + str(current_page) + "_" + CHILDS_NAME + "_" + str(item_count) + ".mov"
+                "path": "mov/" + date + "_" + CHILDS_NAME + "_" + str(count) + ".mov"
             })
+
         item_count += 1
 
 def login(driver):
@@ -117,7 +144,7 @@ def main():
         # Store all image and video links
         list_of_images = driver.find_elements(By.XPATH, "//*[@title='Download Image' or @title='Download Video']")
         
-        add_links_and_path_to_containers(list_of_images, driver, current_page, image_container, video_container)
+        add_links_and_path_to_containers(list_of_images, driver, image_container, video_container)
         
         # Navigate (1) page back until current page = (0)
         if current_page != 1:
