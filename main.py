@@ -2,10 +2,10 @@ import requests
 import os
 import concurrent.futures
 from selenium import webdriver
-from selenium.webdriver.chrome import options
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from tqdm import tqdm
 from datetime import datetime
 from time import sleep
 from decouple import config
@@ -18,7 +18,7 @@ USERNAME = config("ACCOUNT_USERNAME")
 PASSWORD = config("PASSWORD")
 WAIT_TIME = config("WAIT_TIME", default=0)
 CHILDS_NAME = config("CHILDS_NAME")
-HEADLESS = config("HEADLESS", default=True)
+HEADLESS = config("HEADLESS", default=False)
 CORE_COUNT = config("CORE_COUNT", default = 1)  ## Set this to the physical core count on your cpu
 MAX_WORKER = 2 * int(CORE_COUNT) + 1
 LAST_DATE_FILENAME = "last_date.txt"
@@ -37,8 +37,10 @@ def retrieve_media_from_container_of_links(container_of_links_and_path):
         print("Unable to retrieve file:" + path)
 
 def concurrently_retrieve_media_from_container_of_links(container_of_links_and_path):
-    with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKER) as executor:
-        return executor.map(retrieve_media_from_container_of_links, container_of_links_and_path, timeout=60)
+    with tqdm(total=len(container_of_links_and_path), desc='Download Progress') as pbar:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKER) as executor:
+            for _ in executor.map(retrieve_media_from_container_of_links, container_of_links_and_path, timeout=60):
+                pbar.update()
 
 
 # Read the last date from the file
@@ -123,6 +125,9 @@ def main():
     print("Logging into kindercare")
     login(driver)
 
+    # wait for the page to load
+    sleep(.25)
+
     # Close popup window
     driver.find_element(By.CLASS_NAME, "contacts-close-button").click()
 
@@ -131,29 +136,28 @@ def main():
     print("Navigating to correct page to begin link scraping")
     driver.find_element(By.LINK_TEXT, "Entries").click()
 
-    current_page = return_last_page(driver)
-
-    # Navigate to Last page
-    driver.find_element(By.XPATH, "//*[@class='pagination']/li[last()]/a").click()
+    current_page = 1
+    last_page = return_last_page(driver)
 
     image_container = []
     video_container = []
 
-    while current_page > 0:
-        print("Scraping links from page: " + str(current_page))
-        # Store all image and video links
-        list_of_images = driver.find_elements(By.XPATH, "//*[@title='Download Image' or @title='Download Video']")
-        
-        add_links_and_path_to_containers(list_of_images, driver, image_container, video_container)
-        
-        # Navigate (1) page back until current page = (0)
-        if current_page != 1:
-            driver.find_element(
-                By.XPATH, "//*[@class='pagination']/li/a[@rel='prev']"
-            ).click()
+    for current_page in tqdm(range(1, last_page), desc='Scraping Progress'):
+        # Code for scraping the links from the website goes here
+        try:
+            next_found_on_page = driver.find_element(By.XPATH, "//*[@class='pagination']/li/a[@rel='next']") 
+            if next_found_on_page is not None:
+                next_found_on_page.click()
+                # print("Scraping links from page: " + str(current_page) + " of " + str(last_page) + "Progress: " + str(current_page/last_page * 100) + "%")
+                # Store all image and video links
+                list_of_images = driver.find_elements(By.XPATH, "//*[@title='Download Image' or @title='Download Video']")
+                
+                add_links_and_path_to_containers(list_of_images, driver, image_container, video_container)
 
-        current_page -= 1
-
+                current_page += 1
+        except:
+            print("Unable to find next button on page: " + str(current_page))
+            break
 
     print("Beginning video retrieval")
     concurrently_retrieve_media_from_container_of_links(video_container)
