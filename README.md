@@ -12,7 +12,7 @@ This is an example of how to list things you need to use the software and how to
 1. Get selenium chromedriver for your version of chrome [https://chromedriver.chromium.org/downloads](https://chromedriver.chromium.org/downloads)
 2. Clone the repo
    ```sh
-   git clone https://github.com/davidallenr/KinderCareImgScrape.git
+   git clone https://github.com/davidallenr/KinderCareScrape.git
    ```
 3. Install Pip packages
 
