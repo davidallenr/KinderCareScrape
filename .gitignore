@@ -126,7 +126,7 @@ dmypy.json
 # PROJECT SPECIFIC IGNORES
 .env
 .vscode
-img/
-mov/
+downloads/
+downloaded_files.json
 chromedriver
 chromedriver.exe
