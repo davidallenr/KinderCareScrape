@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from datetime import datetime
+from datetime import datetime, timedelta
 from decouple import config
 import hashlib
 import concurrent.futures
@@ -74,7 +74,6 @@ def login(driver):
     print("Sending password")
     driver.find_element(By.NAME, "user[password]").submit()
 
-    # Adjust the below line to wait for an element that indicates successful login
     try:
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CLASS_NAME, "contacts-close-button"))
@@ -91,6 +90,14 @@ def login(driver):
         print("Navigated to Entries page.")
     except TimeoutException:
         print("Failed to navigate to Entries page.")
+
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//*/table/tbody/tr/td[2]"))
+        )
+        print("Successfully logged in and on the correct page.")
+    except Exception as e:
+        print(f"Unsuccessfully logged in and/or on the incorrect page.: {e}")
 
 
 def get_media_links_and_dates(driver):
@@ -128,25 +135,31 @@ def get_media_links_and_dates(driver):
     return media_links_and_dates
 
 
-def download_media(media_info):
+def download_media(media_info, pbar=None):
     url = media_info["url"]
     date = media_info["date"]
     file_extension = media_info["extension"]
+    file_name = f"{date}_{CHILD_NAME}_{content_hash[:8]}.{file_extension}"
 
     try:
         response = requests.get(url, timeout=30)
-        content_hash = hashlib.md5(response.content).hexdigest()
-        file_name = f"{date}_{CHILD_NAME}_{content_hash[:8]}.{file_extension}"
-        file_path = os.path.join(DOWNLOAD_DIR, file_name)
+        if response.status_code == 200:
+            content_hash = hashlib.md5(response.content).hexdigest()
+            file_path = os.path.join(DOWNLOAD_DIR, file_name)
 
-        downloaded_hashes = load_downloaded_hashes()
-        # Check if the file has already been downloaded by comparing hashes
-        if content_hash not in downloaded_hashes.values():
-            with open(file_path, "wb") as file:
-                file.write(response.content)
-            save_downloaded_hash(file_name, content_hash)
+            downloaded_hashes = load_downloaded_hashes()
+            if content_hash not in downloaded_hashes.values():
+                with open(file_path, "wb") as file:
+                    file.write(response.content)
+                save_downloaded_hash(file_name, content_hash)
+        else:
+            if pbar:
+                pbar.write(
+                    f"Failed to download {url}: HTTP status {response.status_code}"
+                )
     except Exception as e:
-        print(f"Failed to download {url}: {e}")
+        if pbar:
+            pbar.write(f"Failed to download {url}: {e}")
 
 
 def return_last_page(driver):
@@ -160,12 +173,19 @@ def return_last_page(driver):
 def concurrently_retrieve_media_from_container_of_links(all_media_info):
     with tqdm(total=len(all_media_info), desc="Download Progress") as pbar:
         with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            # Submit all download tasks and create a list of futures
-            futures = [executor.submit(download_media, info) for info in all_media_info]
-            # Wait for the futures to complete and update the progress bar as each is done
+            futures = [
+                executor.submit(download_media, info, pbar) for info in all_media_info
+            ]
             for future in concurrent.futures.as_completed(futures):
-                # Each time a future completes, update the progress bar
                 pbar.update(1)
+
+
+def get_most_recent_download_date():
+    hashes = load_downloaded_hashes()
+    dates = [
+        datetime.strptime(info.split("_")[0], "%Y-%m-%d") for info in hashes.keys()
+    ]
+    return max(dates) if dates else None
 
 
 def main():
@@ -173,40 +193,66 @@ def main():
     driver = setup_driver()
     try:
         login(driver)
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//*/table/tbody/tr/td[2]"))
+
+        most_recent_download_date = get_most_recent_download_date()
+        buffer_date = (
+            most_recent_download_date - timedelta(days=1)
+            if most_recent_download_date
+            else datetime.min
         )
-        print("Successfully logged in and on the correct page.")
 
         all_media_info = []
-        last_page_reached = False
-
-        # Assuming you have a way to determine the total number of pages upfront
         total_pages = return_last_page(driver)
-        print(f"Total pages to process: {total_pages}")
+        actual_pages_navigated = 0
 
-        for _ in tqdm(range(1, total_pages + 1), desc="Navigating Pages"):
-            if last_page_reached:
-                break
-            all_media_info.extend(get_media_links_and_dates(driver))
-            try:
-                next_button = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable(
-                        (By.XPATH, "//*[@class='pagination']/li/a[@rel='next']")
+        with tqdm(desc="Navigating Pages", unit="page") as pbar:
+            for page in range(1, total_pages + 1):
+                page_media_info = get_media_links_and_dates(driver)
+                # Filter out already downloaded or older items
+                new_media_info = [
+                    item
+                    for item in page_media_info
+                    if datetime.strptime(item["date"], "%Y-%m-%d") > buffer_date
+                ]
+
+                # If there are new items, extend all_media_info; otherwise, stop
+                if new_media_info:
+                    all_media_info.extend(new_media_info)
+                    actual_pages_navigated += 1
+                    pbar.update(1)  # Increment the progress bar
+                else:
+                    pbar.write(
+                        f"All new media up to {buffer_date.strftime('%Y-%m-%d')} has been downloaded. No further pages will be navigated."
                     )
-                )
-                next_button.click()
-            except TimeoutException:
-                print("No more pages to scrape or next page button not found.")
-                last_page_reached = True
+                    break  # Stop if no new media is found
 
-        # Ensure there's something to download
+                # Attempt to navigate to the next page if there's more to process
+                if page < total_pages and new_media_info:
+                    try:
+                        pbar.write("Navigating to the next page...")
+                        next_button = WebDriverWait(driver, 5).until(
+                            EC.element_to_be_clickable(
+                                (By.XPATH, "//*[@class='pagination']/li/a[@rel='next']")
+                            )
+                        )
+                        next_button.click()
+                    except TimeoutException:
+                        pbar.write(
+                            "No more pages to scrape or next page button not found."
+                        )
+                        break
+
+            pbar.total = actual_pages_navigated
+            pbar.n = actual_pages_navigated
+            pbar.refresh()
+
+        print(f"Total pages navigated: {actual_pages_navigated}")
+
         if all_media_info:
             print(f"Starting download of {len(all_media_info)} items...")
             concurrently_retrieve_media_from_container_of_links(all_media_info)
         else:
-            print("No media information gathered to download.")
-
+            print("No new media information gathered to download.")
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
